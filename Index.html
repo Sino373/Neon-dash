@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Dash</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Courier New', Courier, monospace; }
+        canvas { display: block; }
+        #ui {
+            position: absolute; top: 20px; left: 20px;
+            color: #0ff; font-size: 24px; text-shadow: 0 0 10px #0ff;
+            pointer-events: none;
+        }
+        #msg {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #f0f; font-size: 30px; text-align: center;
+            display: none; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">SCORE: <span id="score">0</span></div>
+    <div id="msg">GAME OVER<br>Click to Restart</div>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreEl = document.getElementById('score');
+        const msgEl = document.getElementById('msg');
+
+        // Game Constants
+        let width, height, player, platforms, particles, score, gameActive, gameSpeed;
+        const gravity = 0.6;
+        const jumpForce = -12;
+
+        function init() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            score = 0;
+            gameSpeed = 5;
+            gameActive = true;
+            msgEl.style.display = 'none';
+            
+            player = {
+                x: 100, y: height / 2,
+                w: 30, h: 30,
+                vy: 0,
+                jumps: 0,
+                color: '#0ff'
+            };
+
+            platforms = [
+                { x: 0, y: height - 100, w: width, h: 100 }
+            ];
+            
+            particles = [];
+            spawnPlatform();
+            animate();
+        }
+
+        function spawnPlatform() {
+            let last = platforms[platforms.length - 1];
+            let newW = Math.random() * 150 + 100;
+            let newX = last.x + last.w + (Math.random() * 120 + 80);
+            let newY = Math.max(200, Math.min(height - 100, last.y + (Math.random() * 200 - 100)));
+            platforms.push({ x: newX, y: newY, w: newW, h: 40 });
+        }
+
+        function createParticles(x, y, color) {
+            for(let i=0; i<10; i++) {
+                particles.push({
+                    x, y, 
+                    vx: Math.random() * 4 - 2, 
+                    vy: Math.random() * 4 - 2,
+                    life: 20,
+                    color
+                });
+            }
+        }
+
+        function update() {
+            if (!gameActive) return;
+
+            // Player Physics
+            player.vy += gravity;
+            player.y += player.vy;
+
+            // Platform Logic
+            platforms.forEach((p, i) => {
+                p.x -= gameSpeed;
+
+                // Collision detection
+                if (player.x < p.x + p.w && player.x + player.w > p.x &&
+                    player.y + player.h > p.y && player.y + player.h < p.y + p.vy + 5 &&
+                    player.vy > 0) {
+                    player.vy = 0;
+                    player.y = p.y - player.h;
+                    player.jumps = 0;
+                }
+            });
+
+            // Clean up off-screen platforms
+            if (platforms[0].x + platforms[0].w < 0) {
+                platforms.shift();
+                score++;
+                scoreEl.innerText = score;
+                gameSpeed += 0.1;
+            }
+
+            if (platforms.length < 5) spawnPlatform();
+
+            // Particles
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy; p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            });
+
+            // Death condition
+            if (player.y > height) {
+                gameActive = false;
+                msgEl.style.display = 'block';
+            }
+        }
+
+        function draw() {
+            ctx.fillStyle = 'rgba(5, 5, 5, 0.3)'; // Trail effect
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw Platforms
+            ctx.shadowBlur = 15;
+            platforms.forEach(p => {
+                ctx.shadowColor = '#f0f';
+                ctx.fillStyle = '#f0f';
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+            });
+
+            // Draw Player
+            ctx.shadowColor = player.color;
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+
+            // Draw Particles
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, 2, 2);
+            });
+            ctx.shadowBlur = 0;
+        }
+
+        function animate() {
+            update();
+            draw();
+            if (gameActive) requestAnimationFrame(animate);
+        }
+
+        // Input
+        const handleInput = () => {
+            if (!gameActive) {
+                init();
+            } else if (player.jumps < 2) {
+                player.vy = jumpForce;
+                player.jumps++;
+                createParticles(player.x, player.y + player.h, '#0ff');
+            }
+        };
+
+        window.addEventListener('mousedown', handleInput);
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(); });
+        window.addEventListener('keydown', (e) => { if(e.code === 'Space') handleInput(); });
+
+        init();
+    </script>
+</body>
+</html>
