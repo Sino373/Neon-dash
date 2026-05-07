@@ -1,28 +1,29 @@
-<!DOCTYPE html> hihi
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Dash</title>
+    <title>Neon Dash Pro</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #050505; font-family: 'Courier New', Courier, monospace; }
+        body { margin: 0; overflow: hidden; background: #0a0a0a; font-family: sans-serif; }
         canvas { display: block; }
         #ui {
             position: absolute; top: 20px; left: 20px;
-            color: #0ff; font-size: 24px; text-shadow: 0 0 10px #0ff;
-            pointer-events: none;
+            color: #0ff; font-size: 28px; font-weight: bold;
+            text-shadow: 0 0 10px #0ff; pointer-events: none;
         }
         #msg {
             position: absolute; top: 50%; left: 50%;
             transform: translate(-50%, -50%);
-            color: #f0f; font-size: 30px; text-align: center;
-            display: none; cursor: pointer;
+            color: #f0f; font-size: 32px; text-align: center;
+            display: none; cursor: pointer; background: rgba(0,0,0,0.8);
+            padding: 20px; border: 2px solid #f0f; box-shadow: 0 0 20px #f0f;
         }
     </style>
 </head>
 <body>
     <div id="ui">SCORE: <span id="score">0</span></div>
-    <div id="msg">GAME OVER<br>Click to Restart</div>
+    <div id="msg">CRITICAL FAILURE<br><span style="font-size:20px">Click to Reboot</span></div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
@@ -31,94 +32,84 @@
         const scoreEl = document.getElementById('score');
         const msgEl = document.getElementById('msg');
 
-        // Game Constants
         let width, height, player, platforms, particles, score, gameActive, gameSpeed;
-        const gravity = 0.6;
-        const jumpForce = -12;
+        
+        const gravity = 0.7;
+        const jumpForce = -13;
+        const maxJumps = 3; // Upgraded to Triple Jump!
 
         function init() {
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
             score = 0;
-            gameSpeed = 5;
+            gameSpeed = 6;
             gameActive = true;
             msgEl.style.display = 'none';
+            scoreEl.innerText = "0";
             
             player = {
-                x: 100, y: height / 2,
-                w: 30, h: 30,
+                x: 150, y: height / 2,
+                w: 35, h: 35,
                 vy: 0,
                 jumps: 0,
-                color: '#0ff'
+                glow: 0
             };
 
+            // Start with a very long safe platform
             platforms = [
-                { x: 0, y: height - 100, w: width, h: 100 }
+                { x: 0, y: height - 120, w: width * 0.8, h: 40 }
             ];
             
             particles = [];
-            spawnPlatform();
+            for(let i=0; i<5; i++) spawnPlatform();
             animate();
         }
 
         function spawnPlatform() {
             let last = platforms[platforms.length - 1];
-            let newW = Math.random() * 150 + 100;
-            let newX = last.x + last.w + (Math.random() * 120 + 80);
-            let newY = Math.max(200, Math.min(height - 100, last.y + (Math.random() * 200 - 100)));
+            let newW = Math.random() * 150 + 150;
+            let gap = Math.random() * 100 + 100;
+            let newX = last.x + last.w + gap;
+            // Keep platforms within a reachable vertical range
+            let newY = Math.max(250, Math.min(height - 150, last.y + (Math.random() * 260 - 130)));
             platforms.push({ x: newX, y: newY, w: newW, h: 40 });
-        }
-
-        function createParticles(x, y, color) {
-            for(let i=0; i<10; i++) {
-                particles.push({
-                    x, y, 
-                    vx: Math.random() * 4 - 2, 
-                    vy: Math.random() * 4 - 2,
-                    life: 20,
-                    color
-                });
-            }
         }
 
         function update() {
             if (!gameActive) return;
 
-            // Player Physics
             player.vy += gravity;
             player.y += player.vy;
+            if (player.glow > 0) player.glow -= 2;
 
-            // Platform Logic
-            platforms.forEach((p, i) => {
+            // Better Collision Logic
+            let onGround = false;
+            platforms.forEach((p) => {
                 p.x -= gameSpeed;
 
-                // Collision detection
-                if (player.x < p.x + p.w && player.x + player.w > p.x &&
-                    player.y + player.h > p.y && player.y + player.h < p.y + p.vy + 5 &&
-                    player.vy > 0) {
-                    player.vy = 0;
-                    player.y = p.y - player.h;
-                    player.jumps = 0;
+                // Check if player is falling onto the top of the platform
+                if (player.x + player.w > p.x && 
+                    player.x < p.x + p.w && 
+                    player.y + player.h >= p.y && 
+                    player.y + player.h <= p.y + player.vy + 10 && 
+                    player.vy >= 0) {
+                        player.vy = 0;
+                        player.y = p.y - player.h;
+                        player.jumps = 0;
+                        onGround = true;
                 }
             });
 
-            // Clean up off-screen platforms
+            // Cleanup & Scoring
             if (platforms[0].x + platforms[0].w < 0) {
                 platforms.shift();
                 score++;
                 scoreEl.innerText = score;
-                gameSpeed += 0.1;
+                gameSpeed += 0.15; // Speed up faster for more challenge
+                spawnPlatform();
             }
 
-            if (platforms.length < 5) spawnPlatform();
-
-            // Particles
-            particles.forEach((p, i) => {
-                p.x += p.vx; p.y += p.vy; p.life--;
-                if (p.life <= 0) particles.splice(i, 1);
-            });
-
-            // Death condition
+            // Death if you fall off screen
             if (player.y > height) {
                 gameActive = false;
                 msgEl.style.display = 'block';
@@ -126,27 +117,31 @@
         }
 
         function draw() {
-            ctx.fillStyle = 'rgba(5, 5, 5, 0.3)'; // Trail effect
+            // Dark trail
+            ctx.fillStyle = 'rgba(10, 10, 10, 0.4)';
             ctx.fillRect(0, 0, width, height);
 
             // Draw Platforms
-            ctx.shadowBlur = 15;
             platforms.forEach(p => {
+                ctx.shadowBlur = 15;
                 ctx.shadowColor = '#f0f';
                 ctx.fillStyle = '#f0f';
                 ctx.fillRect(p.x, p.y, p.w, p.h);
+                // Add a little highlight line on top
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(p.x, p.y, p.w, 4);
             });
 
             // Draw Player
-            ctx.shadowColor = player.color;
-            ctx.fillStyle = player.color;
+            ctx.shadowBlur = 15 + player.glow;
+            ctx.shadowColor = '#0ff';
+            ctx.fillStyle = '#0ff';
             ctx.fillRect(player.x, player.y, player.w, player.h);
+            
+            // Subtle "eye" on the player square
+            ctx.fillStyle = '#000';
+            ctx.fillRect(player.x + 20, player.y + 8, 8, 8);
 
-            // Draw Particles
-            particles.forEach(p => {
-                ctx.fillStyle = p.color;
-                ctx.fillRect(p.x, p.y, 2, 2);
-            });
             ctx.shadowBlur = 0;
         }
 
@@ -156,20 +151,21 @@
             if (gameActive) requestAnimationFrame(animate);
         }
 
-        // Input
-        const handleInput = () => {
+        function handleInput(e) {
+            if (e.type === 'keydown' && e.code !== 'Space') return;
+            
             if (!gameActive) {
                 init();
-            } else if (player.jumps < 2) {
+            } else if (player.jumps < maxJumps) {
                 player.vy = jumpForce;
                 player.jumps++;
-                createParticles(player.x, player.y + player.h, '#0ff');
+                player.glow = 20; // Flash when jumping
             }
-        };
+        }
 
         window.addEventListener('mousedown', handleInput);
-        window.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(); });
-        window.addEventListener('keydown', (e) => { if(e.code === 'Space') handleInput(); });
+        window.addEventListener('keydown', handleInput);
+        window.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, {passive: false});
 
         init();
     </script>
