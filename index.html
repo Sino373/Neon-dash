@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neon Dash Ultra</title>
+    <title>Neon Dash: Solo Jump</title>
     <style>
         body { margin: 0; overflow: hidden; background: #050505; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
@@ -24,26 +24,26 @@
 </head>
 <body>
     <div id="ui">SCORE: <span id="score">0</span></div>
-    <div id="msg">SYSTEM CRITICAL<br><span style="font-size:20px">Press Space or Tap to Overclock</span></div>
+    <div id="msg">SYSTEM CRITICAL<br><span style="font-size:20px">Click to Reboot</span></div>
     <canvas id="gameCanvas"></canvas>
 
     <script>
         const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d', { alpha: false }); // Performance optimization
+        const ctx = canvas.getContext('2d', { alpha: false });
         const scoreEl = document.getElementById('score');
         const msgEl = document.getElementById('msg');
 
         let width, height, player, platforms, score, gameActive, gameSpeed, lastTime;
         
-        const gravity = 0.8;
-        const jumpForce = -14;
-        const maxJumps = 3;
+        const gravity = 0.9;      // Snappier fall
+        const jumpForce = -16;    // Stronger single jump
+        // maxJumps removed for single jump logic
 
         function init() {
             width = canvas.width = window.innerWidth;
             height = canvas.height = window.innerHeight;
             score = 0;
-            gameSpeed = 8; // Faster starting speed
+            gameSpeed = 8; 
             gameActive = true;
             lastTime = performance.now();
             msgEl.style.display = 'none';
@@ -53,7 +53,7 @@
                 x: 150, y: height / 2,
                 w: 35, h: 35,
                 vy: 0,
-                jumps: 0,
+                onGround: false, // Track ground state for single jump
                 glow: 0
             };
 
@@ -65,76 +65,73 @@
 
         function spawnPlatform() {
             let last = platforms[platforms.length - 1];
-            let newW = Math.random() * 120 + 100; // Slightly smaller platforms
-            let gap = Math.random() * 120 + 120; // Bigger gaps
+            let newW = Math.random() * 120 + 120;
+            let gap = Math.random() * 80 + 100; // Gaps reduced slightly for single jump safety
             let newX = last.x + last.w + gap;
-            let newY = Math.max(200, Math.min(height - 150, last.y + (Math.random() * 300 - 150)));
+            let newY = Math.max(250, Math.min(height - 150, last.y + (Math.random() * 200 - 100)));
             platforms.push({ x: newX, y: newY, w: newW, h: 40 });
         }
 
         function update(dt) {
             if (!gameActive) return;
-
-            // Use dt (delta time) to ensure consistent speed regardless of FPS
             const speedMultiplier = dt / 16.67; 
 
             player.vy += gravity * speedMultiplier;
             player.y += player.vy * speedMultiplier;
             if (player.glow > 0) player.glow -= 2;
 
+            let currentlyOnPlatform = false;
+
             for (let i = 0; i < platforms.length; i++) {
                 let p = platforms[i];
                 p.x -= gameSpeed * speedMultiplier;
 
-                // Collision Logic
+                // Precision Collision
                 if (player.x + player.w > p.x && 
                     player.x < p.x + p.w && 
                     player.y + player.h >= p.y && 
-                    player.y + player.h <= p.y + player.vy + 10 && 
+                    player.y + player.h <= p.y + player.vy + 12 && 
                     player.vy >= 0) {
                         player.vy = 0;
                         player.y = p.y - player.h;
-                        player.jumps = 0;
+                        currentlyOnPlatform = true;
                 }
             }
+            
+            player.onGround = currentlyOnPlatform;
 
             if (platforms[0].x + platforms[0].w < 0) {
                 platforms.shift();
                 score++;
                 scoreEl.innerText = score;
-                gameSpeed += 0.2; // Aggressive speed scaling
+                gameSpeed += 0.22; 
                 spawnPlatform();
             }
 
-            if (player.y > height || player.y < -500) {
+            if (player.y > height) {
                 gameActive = false;
                 msgEl.style.display = 'block';
             }
         }
 
         function draw() {
-            // Optimization: Avoid fillRect(0,0,w,h) with opacity for trails if performance is key,
-            // but keeping it for the "Neon" aesthetic. Reduced opacity for clearer "speed" look.
             ctx.fillStyle = 'rgba(5, 5, 5, 0.25)';
             ctx.fillRect(0, 0, width, height);
 
+            // Platforms
             ctx.shadowBlur = 10;
-            
-            // Draw Platforms
             ctx.shadowColor = '#f0f';
             ctx.fillStyle = '#f0f';
             for (let p of platforms) {
                 ctx.fillRect(p.x, p.y, p.w, p.h);
-                // Simple white highlight without extra fill calls where possible
             }
 
-            // Draw Player
+            // Player
             ctx.shadowBlur = 15 + player.glow;
             ctx.shadowColor = '#0ff';
             ctx.fillStyle = '#0ff';
             ctx.fillRect(player.x, player.y, player.w, player.h);
             
-            // Eye
             ctx.fillStyle = '#000';
             ctx.shadowBlur = 0;
             ctx.fillRect(player.x + 20, player.y + 8, 8, 8);
@@ -143,7 +140,6 @@
         function animate(now) {
             const dt = now - lastTime;
             lastTime = now;
-
             update(dt);
             draw();
             if (gameActive) requestAnimationFrame(animate);
@@ -151,13 +147,13 @@
 
         function handleInput(e) {
             if (e.type === 'keydown' && e.code !== 'Space' && e.code !== 'ArrowUp') return;
-            e.preventDefault();
+            if (e.cancelable) e.preventDefault();
             
             if (!gameActive) {
                 init();
-            } else if (player.jumps < maxJumps) {
+            } else if (player.onGround) { // Only jump if currently touching a platform
                 player.vy = jumpForce;
-                player.jumps++;
+                player.onGround = false;
                 player.glow = 30;
             }
         }
